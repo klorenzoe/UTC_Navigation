@@ -18,6 +18,7 @@
     hourModifiable DB ?
     minuteModifiable DB ?
     secondModifiable DB ?
+    minutesToSub DB ?
     ;Mensajes auxiliares
     entryUTC DB 'Ingrese UTC: $'
     chooseUTCSaved DB 'Ingrese el numero de el huso a consultar: $'
@@ -100,6 +101,7 @@ InitializeUTC2:
     JMP Add6ToGTQSystemUTC
 
 ShowSpecificTimeUTC:
+    MOV minutesToSub, 30d
     MOV returnLabelCode, 4d
     CALL GetUTCConditions
     CMP SignUTC, '-'
@@ -153,22 +155,29 @@ EndCalculateDateAux:
     CMP returnLabelCode, 4d
     JE PrintAndGotoMenuMAIN
 
+
 ;**** Submenu de husos
 IndiaTime: ;UTC-5:30
+    MOV minutesToSub, 30d
+    CALL SubstractUTCValue
     JMP InitializeUTC
 AlemaniaTime: ;UTC+1
+    MOV minutesToSub, 0d
     MOV UTCMovement, 1d
     CALL AddUTCValue
     JMP InitializeUTC
 CostaTime: ;UTC-4
+    MOV minutesToSub, 0d
     MOV UTCMovement, 4d
     CALL SubstractUTCValue
     JMP InitializeUTC
 ArgentinaTime: ;UTC-3
+    MOV minutesToSub, 0d
     MOV UTCMovement, 3d
     CALL SubstractUTCValue
     JMP InitializeUTC
 JaponTime: ;UTC+9
+    MOV minutesToSub, 0d
     MOV UTCMovement, 9d
     CALL AddUTCValue
     JMP InitializeUTC
@@ -358,12 +367,32 @@ AddUTCValue PROC NEAR
     RET
     AddUTCValue ENDP
 
+SubOneHourMore PROC NEAR
+    MOV aux, 30d
+    MOV AL, 60d
+    SUB AL,aux
+    SUB AL, minuteModifiable
+    MOV minuteModifiable, AL
+    ADD UTCMovement, 1d
+    JMP followSubstract
+    SubOneHourMore ENDP
+
 ; Este metodo resta cualquier corrimiento utc, es necesario
 ; que el corrimiento se guarde en UTCMovement
 SubstractUTCValue PROC NEAR
     CALL SaveCurrentTimeOnModifiableVariables ;obtener la información del sistema
     CALL PrintModifiableDate
     CALL ClearValues
+
+    ;restar los minutos en la variable
+    MOV BL, minutesToSub
+    CMP minuteModifiable, BL
+    JL SubOneHourMore
+    ;si no, solo restarle a los minutos
+    SUB minuteModifiable, BL
+
+    MOV minutesToSub, 0d
+    followSubstract:
     MOV AL, hourModifiable ; En AL se encuentra la hora
     MOV BL, UTCMovement
     MOV aux, BL ;En aux se encuentra el corrimiento
