@@ -10,6 +10,7 @@
     dayModifiable DB ?
     dayNameModificableH DB ?
     dayNameModificableL DB ?
+    dayNameNumber DB 0 ; 0. domingo.......... 7.Sabado
     monthModifiable DB ?
     yearModifiable DB ?
     yearModifiableL DB ?
@@ -39,7 +40,7 @@
     ;Constantes días de la semana
     day DB      ?
     daySet DB      ' SUNDAY $  ',  ' MONDAY $ '
-            DB      ' TUESDAY $  ',  ' WEDNESDAY $ '
+            DB      '   TUESDAY $  ',  '  WEDNESDAY $ '
             DB      ' THURSDAY $  ',  ' FRIDAY $ '
             DB      ' SATURDAY $  '
     
@@ -102,11 +103,14 @@ ShowSpecificTimeUTC:
     MOV returnLabelCode, 4d
     CALL GetUTCConditions
     CMP SignUTC, '-'
-    JMP SubstractUTCValue
+    JE JmpIfNegative
     CMP SignUTC, '+'
-    CALL PrintEnter
-    JMP AddUTCValue
+    JE JmpIfPositive
 
+JmpIfNegative:
+    CALL SubstractUTCValue
+JmpIfPositive:
+    CALL AddUTCValue
 ;OPTION3
 InitializeUTC:
     MOV returnLabelCode, 1d
@@ -139,6 +143,16 @@ ShowOptionUTCTimesSaved:
     ;OPTION DEFAULT
 JMP NotFoundOption
 
+EndCalculateDateAux:
+    CMP returnLabelCode, 1d
+    JE ShowOptionUTCTimesSaved
+    CMP returnLabelCode, 2d
+    JE PrintAndGotoMenu
+    CMP returnLabelCode, 3d
+    JE ShowSpecificTimeUTC
+    CMP returnLabelCode, 4d
+    JE PrintAndGotoMenuMAIN
+
 ;**** Submenu de husos
 IndiaTime: ;UTC-5:30
     JMP InitializeUTC
@@ -160,6 +174,7 @@ JaponTime: ;UTC+9
     JMP InitializeUTC
 ExitSubmenu:
 JMP Menu
+
 
 PrintAndGotoMenuMAIN PROC NEAR
     CALL PrintModifiableDate
@@ -186,17 +201,10 @@ JMP Menu
 
 
 ;Procedimientos para los calculos del UTC °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
-EndCalculateDateAux:
-    CMP returnLabelCode, 1d
-    JE ShowOptionUTCTimesSaved
-    CMP returnLabelCode, 2d
-    JE PrintAndGotoMenu
-    CMP returnLabelCode, 3d
-    JE ShowSpecificTimeUTC
-    CMP returnLabelCode, 4d
-    JE PrintAndGotoMenuMAIN
 
 AddDay PROC NEAR
+;Cambio el valor del string del nombre
+    CALL AddDayToNameString
 ;Cambio el valor de la hora
     MOV AL, hourModifiable
     ADD AL, UTCMovement
@@ -252,6 +260,19 @@ CaseMoth31DaysOnInc:
     JMP EndCalculateDate
 
 SubDay PROC NEAR
+    ;restar un dia al string del nombre
+    CALL SubDayToNameString
+
+    ;Cambio el valor de la hora
+    MOV AL, hourModifiable ;AL contiene la hora del sistema
+    MOV BL, UTCMovement
+    MOV aux, BL ;aux contiene el utc requerido
+    SUB aux, AL ;Aux almacena el resultado de la resta
+    MOV BL, 24d
+    SUB BL, aux
+    MOV hourModifiable, BL ;ahora la hora esta restada
+
+    ;Modificar el día
     CMP dayModifiable, 1d
     JE CaseDecMoth ;si es el primer día del mes, y le quiero restar un día, se tiene que cambiar de mes y ver que día es
     ;Si es cualquier otro día, solo se resta un día
@@ -395,6 +416,7 @@ GetUTCConditions PROC NEAR
     MUL TensUTC
     ADD AL, UnitUTC
     MOV UTCMovement, AL
+    CALL PrintEnter
     RET
     GetUTCConditions ENDP
 
@@ -458,8 +480,6 @@ PrintModifiableDate PROC NEAR
     RET
     PrintModifiableDate ENDP
  
-AddDayAux2:
-    JMP AddDayAux
 
 SaveCurrentTimeOnModifiableVariables PROC NEAR
     ;Read system date
@@ -490,12 +510,21 @@ SaveCurrentTimeOnModifiableVariables PROC NEAR
     MOV CL, aux
     MOV secondModifiable, CL ;Guardar segundos
     CALL ClearValues
-    CALL GetWeekDayName
+
+    ;Interrupcion que trae al día
+    MOV     AX,0600H
+    MOV     AH,2AH
+    INT     21H ;El dia esta en AL
+    MOV dayNameNumber, AL
+    CALL GetWeekDayNameString
     MOV dayNameModificableH, DH
     MOV dayNameModificableL, DL ;Guardo el nombre
     RET
     SaveCurrentTimeOnModifiableVariables ENDP
 
+AddDayAux2:
+    JMP AddDayAux
+    
 Add6ToGTQSystemUTC PROC NEAR
     CALL SaveCurrentTimeOnModifiableVariables ;obtener la información del sistema
     CALL ClearValues
@@ -586,18 +615,44 @@ DisplayNumber PROC NEAR
     DisplayNumber ENDP
 
 ;begin: Metodos para encontrar el día de la semana
-GetWeekDayName PROC NEAR
+GetWeekDayNameString PROC NEAR
+    ;Necesita que el número de día este en AL
     ;Se almacena en DX
-    MOV     AX,0600H
-    MOV     AH,2AH
-    INT     21H
-    MOV     day,DL
+    MOV AL, dayNameNumber
+    MOV     day,DL ;Ingresa el día del mes a esta variable
     MOV     BL, 12d
-    MUL     BL
-    LEA     DX,daySet
+    MUL     BL ;Multiplica 12 por el día de la semana
+    LEA     DX,daySet 
     ADD     DX,AX
     RET
-    GetWeekDayName ENDP
+    GetWeekDayNameString ENDP
+
+AddDayToNameString PROC NEAR
+    CMP dayNameNumber, 7d
+    JE CaseSaturday7
+    ;Si no, solo sumar un dia
+    ADD dayNameNumber, 1d
+    returnAdd:
+    CALL WhenSumDayActualiceHL
+    RET
+    AddDayToNameString ENDP
+
+SubDayToNameString PROC NEAR
+    CMP dayNameNumber, 0d
+    JE CaseSunday0
+    ;Si no, solo restar un dia
+    SUB dayNameNumber, 1d
+    returnSub:
+    CALL WhenSumDayActualiceHL
+    RET
+    SubDayToNameString ENDP
+
+CaseSunday0:
+    MOV dayNameNumber, 7d
+    JMP returnAdd
+CaseSaturday7:
+    MOV dayNameNumber, 0d
+    JMP returnSub
 ; PrintWeekDay PROC NEAR
 ;     MOV  BL, 12d
 ;     MUL     BL
@@ -623,6 +678,14 @@ GetWeekDayName PROC NEAR
 ;         jle loop_clear_12
 ;         ret
 ; ClearScreen ENDP
+
+WhenSumDayActualiceHL PROC NEAR
+    CALL ClearValues
+    CALL GetWeekDayNameString
+    MOV dayNameModificableH, DH
+    MOV dayNameModificableL, DL ;Guardo el nombre
+    RET
+    WhenSumDayActualiceHL ENDP
 
 DEBUG PROC NEAR
     MOV DX, OFFSET debugg
