@@ -6,7 +6,14 @@
     option1 DB '1. consultar la hora del sistema $'
     option2 DB '2. consultar hora con UTC especifico $'
     option3 DB '3. husos horarios almacenados $'
+    option4 DB '4. cambiar la hora con INT $'
     notFount DB 'no se encontro la opcion $'
+    changeHourInstruction DB 'Ingrese la informacion requerida $'
+    hrMsj DB 'Hora: $'
+    mmMsj DB 'Minutos: $'
+    secMsj DB 'Segundos: $'
+
+    ;Variables
     dayModifiable DB ?
     dayNameModificableH DB ?
     dayNameModificableL DB ?
@@ -27,9 +34,8 @@
     costaEsteEU DB '3. Costa este de los Estados Unidos UTC-4$'
     argentina DB '4. Argentina UTC-3$'
     japon DB '5. Japon UTC+9$'
-    custonUTC DB 'UTC custom $'
     exit DB '6. Salir de este menu $'
-
+   
     debugg DB 'debugg $'
 
     ;Variables UTC
@@ -47,6 +53,7 @@
     
     ;Variables auxiliares
     aux DB ?
+    aux2 DB ?
     auxCount DB 0
     returnLabelCode DB 0 ;1. ShowOptionUTCTimesSaved, 2. PrintAndGotoMenu 3. ShowSpecificTimeUTC 4. PrintAndGotoMenuMain
     ; CR Equ 0DH
@@ -72,6 +79,8 @@ Menu:
     CALL PrintString
     MOV DX, offset option3 ;imprimo la opción 3
     CALL PrintString
+    MOV DX, offset option4 ;imprimo la opción 4
+    CALL PrintString
         
  ;Leer la respuesta del menú        
     CALL ReadDigit
@@ -86,6 +95,9 @@ Menu:
     ;OPTION 3
     CMP AL, 3d
     JE InitializeUTC
+    ;OPTION 4
+    CMP AL, 4d
+    JE ChangeHourWithINT
     ;OPTION DEFAULT
     JMP NotFoundOption
 
@@ -113,10 +125,17 @@ JmpIfNegative:
     CALL SubstractUTCValue
 JmpIfPositive:
     CALL AddUTCValue
-;OPTION3
+;OPTION 3
 InitializeUTC:
     MOV returnLabelCode, 1d
     JMP Add6ToGTQSystemUTC
+;OPTION 4
+ChangeHourWithINT:
+    ;Cambiar la hora
+    CALL PrintRequerimentsChangeHr
+    CALL SaveCurrentTimeOnModifiableVariables
+    CALL PrintModifiableDate
+    JMP Menu
 
 ShowOptionUTCTimesSaved:
     CALL SubMenuUTCSaved ;La opcion esta guardada en AL
@@ -716,6 +735,56 @@ WhenSumDayActualiceHL PROC NEAR
     RET
     WhenSumDayActualiceHL ENDP
 
+PrintRequerimentsChangeHr PROC NEAR
+    CALL PrintEnter
+    CALL ClearValues
+    MOV DX, offset changeHourInstruction
+    CALL PrintString
+    ;Pido horas
+    CALL PrintEnter
+    MOV DX, offset hrMsj
+    CALL PrintString
+    CALL ReadDigit ;Leo decenas
+    MOV aux, 10d
+    MUL aux
+    MOV aux, AL ;Guardo decenas en AL
+    CALL ReadDigit
+    ADD AL, aux ;Leo unidades y se los sumo a decenas
+    MOV CH, AL ;Guardo las horas
+    ;Pido minutos
+    CALL PrintEnter
+    MOV DX, offset mmMsj
+    CALL PrintString
+    CALL ReadDigit ;Leo decenas
+    MOV aux, 10d
+    MUL aux
+    MOV aux, AL ;Guardo decenas en AL
+    CALL ReadDigit
+    ADD AL, aux ;Leo unidades y se los sumo a decenas
+    MOV minuteModifiable, AL ;Guardo los minutos
+
+    ;Pido los segundos
+    CALL PrintEnter
+    MOV DX, offset secMsj
+    CALL PrintString
+    CALL ReadDigit ;Leo decenas
+    MOV aux, 10d
+    MUL aux
+    MOV aux, AL ;Guardo decenas en AL
+    CALL ReadDigit
+    ADD AL, aux ;Leo unidades y se los sumo a decenas
+    MOV secondModifiable, AL ;Guardo los segundos
+
+    ;Ejecuto la interrupcion
+    MOV CH, hourModifiable
+    MOV CL, minuteModifiable
+    MOV DH, secondModifiable
+    MOV DL, 0d
+    MOV AH, 2DH
+    INT 21h
+    CALL PrintEnter
+    RET
+    PrintRequerimentsChangeHr ENDP
 DEBUG PROC NEAR
     MOV DX, OFFSET debugg
     CALL PrintString
